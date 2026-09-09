@@ -1,3 +1,4 @@
+import { parseInstructions } from './instructions.js';
 import { samplePaper } from './paper.js';
 import { normalizeRich } from './rich-text.js';
 import { questionImages, partTables, modernizeProject, responseType } from './content.js';
@@ -10,12 +11,17 @@ const capacityError = () => new Error('This paper would exceed the 40 MB project
 export const id = () => crypto.randomUUID();
 export const newPart = () => ({ id: id(), text: normalizeRich(''), marks: 1, lines: 2, responseType: 'written' });
 export const newQuestion = () => ({ id: id(), title: '', context: normalizeRich('', { allowBlank: false }), parts: [newPart()] });
-export function createProject(example = false) {
+export function createProject(example = false, now = new Date()) {
+  // Use the device's local date: the academic year rolls over on June 1.
+  const startYear = now.getFullYear() - (now.getMonth() < 5 ? 1 : 0);
+  const academicYear = `${startYear}-${String((startYear + 1) % 100).padStart(2, '0')}`;
   const paper = example ? samplePaper() : {
-    title: 'Term 1 Assessment', subject: 'SCIENCE', level: 'CA-3', year: '2026-27',
+    title: 'Term 1 Assessment', subject: 'SCIENCE', level: 'CA-3', year: academicYear,
     term: 'TA-1', kind: 'QP', paper: 1, duration: '1 h 30 min', targetMarks: 40, template: DEFAULT_TEMPLATE_ID,
     sample: false, questions: [newQuestion()],
   };
+  paper.year = academicYear;
+  paper.dateYear = String(now.getFullYear());
   paper.questions.forEach(q => { q.id ||= id(); q.parts.forEach(p => { p.id ||= id(); }); });
   return { format: FORMAT, version: VERSION, id: id(), updatedAt: new Date().toISOString(), paper, images: {} };
 }
@@ -75,6 +81,8 @@ export function parseProject(text) {
   paper.paper = integer(p.paper, 1, 2, 'paper number');
   paper.targetMarks = integer(p.targetMarks, 0, 1000, 'maximum marks');
   paper.sample = p.sample === true;
+  if (p.dateYear !== undefined) paper.dateYear = string(p.dateYear, 4, 'date year');
+  if (p.instructions !== undefined) paper.instructions = parseInstructions(p.instructions);
   paper.questions = p.questions.map(q => {
     if (!q || !Array.isArray(q.parts) || q.parts.length > 26) fail('subquestions');
     const question = { id: id(), title: string(q.title, 100, 'question title'), context: rich(q.context, 'question context', false), parts: [] };
@@ -90,6 +98,10 @@ export function parseProject(text) {
       let type;
       try { type = responseType(part); } catch { fail('response type'); }
       const result = { id: id(), text: rich(part.text, 'prompt', true), marks: integer(part.marks, 0, 1000, 'marks'), lines: integer(part.lines, 0, 25, 'answer lines'), responseType: type };
+      if (part.showAnswerLines !== undefined) {
+        if (typeof part.showAnswerLines !== 'boolean') fail('answer line visibility');
+        result.showAnswerLines = part.showAnswerLines;
+      }
       if (part.options !== undefined) {
         if (!Array.isArray(part.options) || part.options.length > 6) fail('options');
         result.options = part.options.map(option => string(option, 300, 'option'));

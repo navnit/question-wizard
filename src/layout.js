@@ -1,3 +1,4 @@
+import { instructionTexts } from './instructions.js';
 import { footerText } from './paper.js';
 import { questionImages, partTables, responseType } from './content.js';
 import { plainText } from './rich-text.js';
@@ -92,7 +93,7 @@ function makeRows(question, qi, measure, metrics) {
     nodes.push(...responseNodes(part, type, measure, textWidth));
     if (part.bank?.length) nodes.push(tableNode({ rows: [[part.bank.join('   •   ')]], header: true }, measure, textWidth));
     for (const table of partTables(part)) nodes.push(tableNode(table, measure, textWidth));
-    if (type === 'written' && part.lines) nodes.push({ type: 'answers', count: part.lines, leading: template.answerLeading, after: 2, height: part.lines * template.answerLeading + 2 });
+    if (type === 'written' && part.lines) nodes.push({ type: 'answers', visible: part.showAnswerLines !== false, count: part.lines, leading: template.answerLeading, after: 2, height: part.lines * template.answerLeading + 2 });
     return {
       question: qi + 1, part: String.fromCharCode(97 + pi), first: pi === 0,
       marks: part.marks,
@@ -123,8 +124,7 @@ export function layoutPaper(paper, measure) {
   nextPage();
   for (const [qi, question] of paper.questions.entries()) {
     const rows = makeRows(question, qi, measure, metrics);
-    const height = rows.reduce((sum, row) => sum + row.height, template.fragmentHeaderHeight);
-    if (page.rows.length && height <= capacity && page.used + height > capacity) nextPage();
+    // Pack complete subquestions rather than moving a whole question to a fresh page.
     let fragment = null;
     for (const row of rows) {
       const headerHeight = fragment ? 0 : template.fragmentHeaderHeight;
@@ -157,5 +157,27 @@ export function layoutPaper(paper, measure) {
       fragment.height = top + page.used - fragment.y;
     }
   }
-  return { pages, pageCount: pages.length + 1, totalMarks: paper.targetMarks, template: template.id, metrics };
+  const instructions = instructionTexts(paper).map(text => paragraph(text, measure, { width: 490, size: 10.5, leading: 14, after: 4 }));
+  const overflow = instructions.reduce((height, node) => height + node.height, 0) > 206;
+  const coverInstructions = [], instructionPages = [];
+  let used = 0, continuing = false;
+  for (const node of instructions) {
+    if (!continuing && used + node.height <= (overflow ? 184 : 206)) {
+      coverInstructions.push(node);
+      used += node.height;
+      continue;
+    }
+    continuing = true;
+    let page = instructionPages.at(-1);
+    if (!page || page.used + node.height > 700) {
+      page = { nodes: [], used: 0 };
+      instructionPages.push(page);
+    }
+    page.nodes.push(node);
+    page.used += node.height;
+  }
+  const instructionHeight = coverInstructions.reduce((sum, node) => sum + node.height, 0);
+  const informationY = 416 + instructionHeight + (instructionPages.length ? 22 : 0) + 14;
+  const cover = { instructionsY: 416, informationY, marksY: informationY + 98 };
+  return { cover, coverInstructions, instructionPages, pages, pageCount: pages.length + instructionPages.length + 1, totalMarks: paper.targetMarks, template: template.id, metrics };
 }

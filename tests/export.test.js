@@ -11,7 +11,7 @@ test('unsupported question characters are reported instead of exporting missing 
   await assert.rejects(exportPdf(paper, assets), /font does not support/);
 });
 
-for (const [stress, pages] of [[false, 7], [true, 9]]) test(`sample PDF export retains ${pages} planned pages`, async () => {
+for (const [stress, pages] of [[false, 6], [true, 9]]) test(`sample PDF export retains ${pages} planned pages`, async () => {
   const result = await exportPdf(samplePaper(stress), assets);
   const pdf = await PDFDocument.load(result.bytes);
   assert.equal(pdf.getPageCount(), pages);

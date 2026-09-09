@@ -181,3 +181,49 @@ test('Word starts prompt labels at the margin before advancing to the text and b
   assert.match(tabs[1], /w:leader="underscore"/);
   assert.ok(Number(tabs[1].match(/w:pos="(\d+)"/)[1]) > Number(tabs[0].match(/w:pos="(\d+)"/)[1]));
 });
+
+test('custom exam rules appear in PDF and Word with wrapped cover text', async () => {
+  const paper = fixture();
+  paper.instructions = { writing: 'pen', calculator: 'allowed', nameDate: true, diagrams: false, noAttachments: false, noCorrection: false, showWorking: true, ruler: false, custom: 'Write the question number beside each answer and check that you have included all the required units before handing in your paper.' };
+  const { result, xml } = await xmlFor(paper);
+  const pdf = await getDocument({ data: result.bytes.slice(), useSystemFonts: true }).promise;
+  const content = await (await pdf.getPage(1)).getTextContent();
+  const text = content.items.map(item => item.str).join(' ');
+  for (const expected of ['Use blue or black ink for writing.', 'Calculators are allowed.', 'Show all your working.']) {
+    assert.ok(text.includes(expected));
+    assert.ok(textOfXml(xml).includes(expected));
+  }
+  assert.ok(!text.includes('Use HB pencils'));
+  assert.ok(!textOfXml(xml).includes('Use HB pencils'));
+  assert.ok(result.plan.coverInstructions.at(-1).lines.length > 1);
+  assert.ok(text.includes('handing in your paper.'));
+  await pdf.cleanup();
+});
+test('long exam instructions continue onto another page in PDF and Word', async () => {
+  const paper = fixture();
+  paper.instructions = { writing: 'pen', calculator: 'allowed', nameDate: true, diagrams: true, noAttachments: true, noCorrection: true, showWorking: true, ruler: true, custom: 'Long additional instructions. '.repeat(30) };
+  const { result, xml } = await xmlFor(paper);
+  assert.ok(result.plan.instructionPages.length > 0);
+  assert.equal(result.plan.pageCount, result.plan.pages.length + result.plan.instructionPages.length + 1);
+  const pdf = await getDocument({ data: result.bytes.slice(), useSystemFonts: true }).promise;
+  assert.equal(pdf.numPages, result.plan.pageCount);
+  const text = (await (await pdf.getPage(2)).getTextContent()).items.map(item => item.str).join(' ');
+  assert.ok(text.includes('Instructions (continued)'));
+  assert.ok(text.includes('Long additional instructions.'));
+  assert.ok(textOfXml(xml).includes('Instructions (continued)'));
+  assert.equal(textOfXml(xml).replace(/\s+/g, ' ').split('Long additional instructions.').length - 1, 30);
+  await pdf.cleanup();
+});
+
+test('PDF and Word print the chosen date year independently from the academic year', async () => {
+  const paper = fixture();
+  paper.year = '2026-27';
+  paper.dateYear = '2031';
+  const { result, xml } = await xmlFor(paper);
+  const pdf = await getDocument({ data: result.bytes.slice(), useSystemFonts: true }).promise;
+  const text = (await (await pdf.getPage(1)).getTextContent()).items.map(item => item.str).join(' ');
+  assert.match(text, /DATE:\s*\/\s*\/\s*2031/);
+  assert.match(textOfXml(xml), /DATE:\s*\/\s*\/\s*2031/);
+  assert.ok(text.includes('2026-27'));
+  await pdf.cleanup();
+});

@@ -6,7 +6,7 @@ import { icon, ICON_NAMES, mountIcons } from '../src/icons.js';
 const EXPECTED_ICON_NAMES = [
   'archive', 'arrow-down', 'arrow-left', 'arrow-right', 'arrow-up',
   'bold', 'check-circle', 'chevron-left', 'chevron-right', 'copy',
-  'eraser', 'file-down', 'file-text', 'hard-drive', 'image-off',
+  'eraser', 'file-down', 'file-text', 'hard-drive', 'image', 'image-off',
   'info', 'italic', 'list', 'list-ordered', 'plus', 'redo',
   'refresh', 'subscript', 'superscript', 'text-cursor-input',
   'trash', 'triangle-alert', 'underline', 'undo', 'x',

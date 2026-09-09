@@ -66,31 +66,41 @@ export async function exportPdf(paper, assets, { draft = false } = {}) {
   centered(paper.level, 164, 12, true);
   if (paper.sample) centered('SAMPLE PAPER', 187, 8);
   text('NAME:', 36, 224, 12, true); rect(94, 214, 465, 32);
-  text(`DATE:             /             / ${paper.year.slice(0, 4)}`, 36, 271, 12, true);
-  line(36, 310, 559, 310, 1);
-  text(`Paper ${paper.paper}`, 36, 330, 12, true);
-  text('Signature of the Invigilator', 363, 330, 11.5, true);
-  text(`Duration: ${paper.duration}`, 36, 372, 12, true);
-  line(36, 410, 559, 410, 1);
-  text('Instructions:', 44, 438, 12, true);
-  const instructions = [
-    'Use HB pencils for writing.',
-    'Fill in the boxes at the top of this page with your name and date.',
-    'You may use a soft pencil for diagrams, graphs or rough working.',
-    'Do not use staples, paper clips or highlighters.',
-    'Do not use whitener, correction fluid or correction tape.',
-  ];
-  instructions.forEach((value, i) => text(`•  ${value}`, 49, 466 + i * 25, 10.5));
-  text('Information:', 44, 613, 12, true);
-  ['Answer all questions in the space provided.', 'The marks for each question are shown in brackets [ ].', 'At the end, fasten all your work securely together.'].forEach((value, i) => text(`•  ${value}`, 49, 642 + i * 25, 10.5));
+  text(`DATE:             /             / ${paper.dateYear ?? paper.year.slice(0, 4)}`, 36, 271, 12, true);
+  line(36, 296, 559, 296, 1);
+  text(`Paper ${paper.paper}`, 36, 310, 12, true);
+  text('Signature of the Invigilator', 363, 310, 11.5, true);
+  text(`Duration: ${paper.duration}`, 36, 344, 12, true);
+  line(36, 380, 559, 380, 1);
+  text('Instructions:', 44, 392, 12, true);
+  let instructionY = plan.cover.instructionsY;
+  for (const node of plan.coverInstructions) {
+    text('•', 49, instructionY, 10.5);
+    drawParagraph(node, 61, instructionY, 490);
+    instructionY += node.height;
+  }
+  if (plan.instructionPages.length) text('Instructions continue on the next page.', 49, instructionY + 4, 10.5, true);
+  text('Information:', 44, plan.cover.informationY, 12, true);
+  ['Answer all questions in the space provided.', 'The marks for each question are shown in brackets [ ].', 'At the end, fasten all your work securely together.'].forEach((value, i) => text(`•  ${value}`, 49, plan.cover.informationY + 29 + i * 20, 10.5));
   const widths = [174.43, 174.43, 174.42]; let sx = 36;
   ['MAXIMUM MARKS', 'MARKS SCORED', "SUBJECT TEACHER'S SIGN"].forEach((value, i) => {
-    rect(sx, 728, widths[i], 23, { fill: gray }); text(value, sx + (widths[i] - measure(value, 9, true)) / 2, 734, 9, true);
-    rect(sx, 751, widths[i], 28);
-    if (!i) text(String(paper.targetMarks), sx + 80, 756, 12, true);
+    rect(sx, plan.cover.marksY, widths[i], 23, { fill: gray }); text(value, sx + (widths[i] - measure(value, 9, true)) / 2, plan.cover.marksY + 6, 9, true);
+    rect(sx, plan.cover.marksY + 23, widths[i], 28);
+    if (!i) text(String(paper.targetMarks), sx + 80, plan.cover.marksY + 28, 12, true);
     sx += widths[i];
   });
   footer(1);
+  for (const [index, continued] of plan.instructionPages.entries()) {
+    page = doc.addPage([PAGE.width, PAGE.height]);
+    text('Instructions (continued)', PAGE.left, PAGE.top, 12, true);
+    let y = 70;
+    for (const node of continued.nodes) {
+      text('•', 49, y, 10.5);
+      drawParagraph(node, 61, y, 490);
+      y += node.height;
+    }
+    footer(index + 2);
+  }
   for (const [index, planned] of plan.pages.entries()) {
     page = doc.addPage([PAGE.width, PAGE.height]);
     const { template, columns, pad } = plan.metrics;
@@ -127,8 +137,8 @@ export async function exportPdf(paper, assets, { draft = false } = {}) {
         if (node.type === 'rich-paragraph') drawRichParagraph(node, contentX, cursor);
         if (node.type === 'image') image(node.name, contentX + (width - node.width) / 2, cursor, node.width, node.imageHeight);
         if (node.type === 'image-row') for (const diagram of node.images) image(diagram.name, contentX + diagram.x, cursor, diagram.width, diagram.height);
-        if (node.type === 'answers') for (let i = 0; i < node.count; i++) {
-          page.drawLine({ start: { x: contentX, y: PAGE.height - cursor - (i + 1) * node.leading + 5 }, end: { x: contentX + width - 2, y: PAGE.height - cursor - (i + 1) * node.leading + 5 }, thickness: 0.5, color: gray, dashArray: [1, 2] });
+        if (node.type === 'answers' && node.visible !== false) for (let i = 0; i < node.count; i++) {
+          page.drawLine({ start: { x: contentX, y: PAGE.height - cursor - (i + 1) * node.leading + 5 }, end: { x: contentX + width - 2, y: PAGE.height - cursor - (i + 1) * node.leading + 5 }, thickness: 0.5, color: black, dashArray: [1, 2] });
         }
         if (node.type === 'table') {
           let ty = cursor;
@@ -146,7 +156,7 @@ export async function exportPdf(paper, assets, { draft = false } = {}) {
       }
     }
     if (index === plan.pages.length - 1) centered('END OF PAPER', Math.min(PAGE.bottom + 5, planned.top + planned.used + 12), 10, true);
-    footer(index + 2);
+    footer(index + plan.instructionPages.length + 2);
   }
   return { bytes: await doc.save(), plan, measure };
 }

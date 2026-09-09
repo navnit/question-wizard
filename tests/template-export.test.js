@@ -83,7 +83,7 @@ for (const id of ['classic', 'ledger', 'cards']) test(`${id} Word output keeps m
   assert.match(xml, />\[2\]<\/w:t>/);
   assert.match(xml, /w:insideH w:val="(?:nil|none)"/);
   assert.match(xml, /w:line="600"/);
-  assert.match(xml, /w:bottom w:val="dotted"[^>]+w:color="D9D9D9"/);
+  assert.match(xml, /w:bottom w:val="dotted"[^>]+w:color="000000"/);
 });
 
 test('cards Word output uses one gray native header and no private title', async () => {
@@ -99,4 +99,22 @@ test('cards Word output uses one gray native header and no private title', async
 test('ledger Word output uses a fixed 22-point number block instead of a full-height rail', async () => {
   const xml = await documentXml(fixture('ledger'));
   assert.match(xml, /w:trHeight w:val="440" w:hRule="exact"[\s\S]{0,1500}w:tcW w:type="dxa" w:w="440"[\s\S]{0,1500}w:fill="000000"/);
+});
+
+test('blank answer space exports without dotted borders in Word', async () => {
+  const paper = fixture('classic');
+  paper.questions.forEach(q => q.parts.forEach(part => { part.showAnswerLines = false; }));
+  const xml = await documentXml(paper);
+  assert.doesNotMatch(xml, /w:val="dotted"/);
+  assert.match(xml, /w:line="600"/);
+});
+
+test('blank answer space omits dotted answer strokes in PDF', async () => {
+  const paper = fixture('classic');
+  const lined = await exportPdf(paper, assets);
+  assert.match(await pageOperators(lined.bytes), /\[1 2\] 0 d/);
+  paper.questions.forEach(q => q.parts.forEach(part => { part.showAnswerLines = false; }));
+  const blank = await exportPdf(paper, assets);
+  assert.doesNotMatch(await pageOperators(blank.bytes), /\[1 2\] 0 d/);
+  assert.equal(blank.plan.pageCount, lined.plan.pageCount);
 });

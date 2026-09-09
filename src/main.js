@@ -1,3 +1,6 @@
+import { createHelp, shouldShowHelp } from './help.js';
+import { editImage } from './image-editor.js';
+import { instructionSettings } from './instructions.js';
 import './styles.css';
 import { createProject, duplicateProject, newQuestion, newPart, id, backupProject, parseProject, dataUrl, imageBytes, prepareDraft } from './project.js';
 import { listProjects, saveProject, deleteProject, DraftWriter } from './storage.js';
@@ -13,6 +16,7 @@ import { mountRichEditors } from './rich-editor.js';
 import { mountIcons } from './icons.js';
 
 const $ = name => document.getElementById(name);
+const help = createHelp({ getScreen: () => !current ? 'library' : selected ? 'question' : 'details' });
 function status(element, message, iconName = '') {
   element.replaceChildren();
   if (iconName) {
@@ -137,7 +141,7 @@ async function generate(followQuestion = null) {
     if (token !== generation || current?.id !== snapshot.id) return;
     const questionIndex = snapshot.paper.questions.findIndex(q => q.id === followQuestion);
     const pageIndex = questionIndex < 0 ? -1 : pdf.plan.pages.findIndex(page => page.rows.some(row => row.question === questionIndex + 1));
-    const committed = await preview.load(pdf.bytes, () => token === generation && current?.id === snapshot.id, pageIndex < 0 ? 1 : pageIndex + 2);
+    const committed = await preview.load(pdf.bytes, () => token === generation && current?.id === snapshot.id, pageIndex < 0 ? 1 : pageIndex + pdf.plan.instructionPages.length + 2);
     if (token !== generation || current?.id !== snapshot.id) return;
     if (!committed) { exportStatus('Preview refresh was interrupted. Update the preview before downloading.', true); return; }
     $('preview-empty').hidden = true; $('page-canvas').classList.remove('outdated');
@@ -175,6 +179,7 @@ function move(array, index, direction) {
   if (index >= 0 && next >= 0 && next < array.length) [array[index], array[next]] = [array[next], array[index]];
 }
 async function action(name, element) {
+  if (name === 'help') return help.open();
   const q = current?.paper.questions.find(q => q.id === selected);
   const qi = current?.paper.questions.findIndex(q => q.id === selected);
   const part = q?.parts.find(p => p.id === element.dataset.id), pi = q?.parts.indexOf(part);
@@ -231,6 +236,19 @@ async function action(name, element) {
     if (!(await confirmDelete('Delete this question?', 'Its subquestions and answer areas will also be removed.'))) return;
     current.paper.questions.splice(qi, 1); selected = current.paper.questions[Math.max(0, qi - 1)]?.id || null;
   } else if (name === 'image') { imageTarget = { project: current.id, question: q.id, replace: element.dataset.replace === undefined ? null : Number(element.dataset.replace) }; $('image-file').click(); return; }
+  else if (name === 'edit-image') {
+    const targetProject = current.id, diagram = q.images[ii];
+    const original = current.images[diagram.name];
+    try {
+      const edited = await editImage(original?.dataUrl || `${import.meta.env.BASE_URL}assets/skeleton.png`, diagram.width);
+      if (!edited || current?.id !== targetProject || q.images[ii] !== diagram) return;
+      const name = `img-${id()}`;
+      current.images[name] = { name: original?.name || 'Edited diagram.png', type: edited.type, dataUrl: edited.dataUrl };
+      q.images[ii] = { name, width: edited.width, height: edited.height };
+      if (changed(true)) notice('Diagram updated. The preview and exports use your edited image.');
+    } catch (error) { notice(error.message || 'This diagram could not be edited.', true); }
+    return;
+  }
   else if (name === 'remove-image') q.images.splice(ii, 1);
   else if (name === 'image-up' || name === 'image-down') move(q.images, ii, name === 'image-up' ? -1 : 1);
   else if (name === 'add-part') { if (q.parts.length >= 26) return; q.parts.push(newPart()); }
@@ -271,6 +289,11 @@ document.addEventListener('input', event => {
   if (element.type === 'number') {
     value = element.value === '' ? 0 : Math.max(Number(element.min || 0), Math.min(Number(element.max || 1000), Math.trunc(value || 0)));
     if (element.value !== '' && Number(element.value) !== value) element.value = String(value);
+  }
+  if (kind === 'instruction') {
+    current.paper.instructions = { ...instructionSettings(current.paper), [key]: value };
+    changed();
+    return;
   }
   if (kind === 'paper') {
     if (key === 'template') {
@@ -367,7 +390,7 @@ async function initialize() {
     if (project) await openProject(project); else renderLibrary();
   } catch (error) { renderLibrary(); notice('Local draft storage is unavailable in this browser. Enable site storage and reload. ' + error.message, true); }
 }
-initialize();
+initialize().then(() => { if (shouldShowHelp()) help.open({ replay: true }); });
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL }).then(async () => {
     await navigator.serviceWorker.ready; status($('connection'), 'Saved for offline use', 'hard-drive');

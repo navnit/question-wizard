@@ -91,3 +91,35 @@ test('page plans expose complete question fragments and card headers', () => {
     }
   }
 });
+
+for (const template of ['classic', 'ledger', 'cards']) test(`${template} fills question pages by breaking between complete subquestions`, () => {
+  const paper = samplePaper();
+  paper.template = template;
+  paper.questions = [
+    { context: '', parts: [{ text: 'Explain your answer.', marks: 1, lines: 12 }] },
+    { context: '', parts: [{ text: 'State one reason.', marks: 1, lines: 2 }, { text: 'Describe the method.', marks: 1, lines: 10 }] },
+  ];
+  const plan = layoutPaper(paper, measure);
+  assert.deepEqual(plan.pages[0].rows.map(row => [row.question, row.part]), [[1, 'a'], [2, 'a']]);
+  assert.equal(plan.pages[1].rows[0].part, 'b');
+  assert.ok(plan.pages[1].fragments[0].continued);
+  assert.deepEqual(plan.pages.flatMap(page => page.rows).map(row => row.nodes.find(node => node.type === 'answers').count), [12, 2, 10]);
+  for (const page of plan.pages) assert.ok(page.top + page.used <= PAGE.bottom);
+});
+
+test('cover fits common rules and a short custom instruction without an extra page', () => {
+  const paper = samplePaper();
+  paper.instructions = { writing: 'pen', calculator: 'allowed', nameDate: true, diagrams: true, noAttachments: true, noCorrection: true, showWorking: true, ruler: true, custom: 'Check your answers.' };
+  const plan = layoutPaper(paper, measure);
+  assert.equal(plan.instructionPages.length, 0);
+  assert.ok(plan.cover.marksY + 51 <= PAGE.bottom);
+});
+
+test('hiding answer lines preserves writing space and pagination', () => {
+  const paper = samplePaper();
+  const lined = layoutPaper(paper, measure);
+  paper.questions.forEach(q => q.parts.forEach(part => { part.showAnswerLines = false; }));
+  const blank = layoutPaper(paper, measure);
+  assert.deepEqual(blank.pages.map(p => p.rows.map(r => [r.y, r.height])), lined.pages.map(p => p.rows.map(r => [r.y, r.height])));
+  assert.ok(blank.pages.flatMap(p => p.rows).flatMap(r => r.nodes).filter(n => n.type === 'answers').every(n => n.visible === false));
+});

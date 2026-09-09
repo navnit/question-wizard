@@ -87,7 +87,7 @@ function contentNodes(nodes, assets) {
     ];
     if (node.type === 'answers') return Array.from({ length: node.count }, (_, i) => p([''], {
       leading: node.leading, size: 1, after: i === node.count - 1 ? node.after : 0,
-      border: { bottom: { style: BorderStyle.DOTTED, size: 4, color: PAPER_GRAY, space: 3 }, between: { style: BorderStyle.DOTTED, size: 4, color: PAPER_GRAY, space: 3 } },
+      ...(node.visible !== false ? { border: { bottom: { style: BorderStyle.DOTTED, size: 4, color: '000000', space: 3 }, between: { style: BorderStyle.DOTTED, size: 4, color: '000000', space: 3 } } } : {}),
     }));
     if (node.type === 'table') return [
       table(node.rows.map(row => new TableRow({
@@ -99,7 +99,7 @@ function contentNodes(nodes, assets) {
   });
 }
 
-function cover(paper, assets) {
+function cover(paper, assets, plan) {
   return [
     table([new TableRow({ children: [
       cell([imageParagraph(assets, 'school', 110, 50, 0, AlignmentType.LEFT)], 200, { padding: 0, bordered: false }),
@@ -112,13 +112,14 @@ function cover(paper, assets) {
     table([new TableRow({ height: { value: twips(32), rule: HeightRule.EXACT }, children: [
       cell([p(['NAME:'], { bold: true })], 58, { padding: 7, bordered: false }), cell([p()], PAGE.body - 58),
     ] })], [58, PAGE.body - 58], false),
-    spacer(17), p([`DATE:             /             / ${paper.year.slice(0, 4)}`], { bold: true, after: 22 }),
-    p([], { children: [new TextRun({ children: [`Paper ${paper.paper}`, new Tab(), 'Signature of the Invigilator'], font: font(), bold: true, size: 23 })], tabStops: [{ type: TabStopType.RIGHT, position: twips(PAGE.body) }], before: 14, after: 24, border: { top: { ...border, space: 12 } } }),
-    p([`Duration: ${paper.duration}`], { bold: true, after: 26 }),
+    spacer(17), p([`DATE:             /             / ${paper.dateYear ?? paper.year.slice(0, 4)}`], { bold: true, after: 12 }),
+    p([], { children: [new TextRun({ children: [`Paper ${paper.paper}`, new Tab(), 'Signature of the Invigilator'], font: font(), bold: true, size: 23 })], tabStops: [{ type: TabStopType.RIGHT, position: twips(PAGE.body) }], before: 10, after: 16, border: { top: { ...border, space: 12 } } }),
+    p([`Duration: ${paper.duration}`], { bold: true, after: 12 }),
     p(['Instructions:'], { bold: true, leading: 18, after: 12, border: { top: { ...border, space: 12 } } }),
-    ...['Use HB pencils for writing.', 'Fill in the boxes at the top of this page with your name and date.', 'You may use a soft pencil for diagrams, graphs or rough working.', 'Do not use staples, paper clips or highlighters.', 'Do not use whitener, correction fluid or correction tape.'].map(s => p([`•  ${s}`], { size: 10.5, leading: 16, after: 9 })),
-    spacer(15), p(['Information:'], { bold: true, leading: 18, after: 12 }),
-    ...['Answer all questions in the space provided.', 'The marks for each question are shown in brackets [ ].', 'At the end, fasten all your work securely together.'].map(s => p([`•  ${s}`], { size: 10.5, leading: 16, after: 9 })),
+    ...plan.coverInstructions.map(node => p(node.lines.map((line, index) => `${index ? '   ' : '•  '}${line}`), { size: node.size, leading: node.leading, after: node.after })),
+    ...(plan.instructionPages.length ? [p(['Instructions continue on the next page.'], { size: 10.5, bold: true, leading: 14, after: 4 })] : []),
+    spacer(14), p(['Information:'], { bold: true, leading: 18, after: 12 }),
+    ...['Answer all questions in the space provided.', 'The marks for each question are shown in brackets [ ].', 'At the end, fasten all your work securely together.'].map(s => p([`•  ${s}`], { size: 10.5, leading: 14, after: 6 })),
     spacer(10),
     table([
       new TableRow({ children: ['MAXIMUM MARKS', 'MARKS SCORED', "SUBJECT TEACHER'S SIGN"].map(t => cell([p([t], { size: 9, bold: true, align: 'center', leading: 14 })], PAGE.body / 3, { padding: 5, shading: { fill: PAPER_GRAY } })) }),
@@ -198,7 +199,13 @@ export async function exportDocx(paper, plan, assets) {
     children: [new TextRun({ text: footerText(paper), font: font(false), size: 16 }), new TextRun({ text: '\t', size: 16 }), new TextRun({ children: [PageNumber.CURRENT, ` / ${plan.pageCount}`], font: font(false), size: 16 })],
     tabStops: [{ type: TabStopType.RIGHT, position: twips(PAGE.body) }], spacing: { before: 0, after: 0 },
   })] });
-  const sections = [{ properties: sectionProps, footers: { default: footer() }, children: cover(paper, assets) }];
+  const sections = [{ properties: sectionProps, footers: { default: footer() }, children: cover(paper, assets, plan) }];
+  for (const continued of plan.instructionPages) {
+    sections.push({ properties: sectionProps, footers: { default: footer() }, children: [
+      p(['Instructions (continued)'], { size: 12, bold: true, leading: 18, after: 16 }),
+      ...continued.nodes.map(node => p(node.lines.map((line, index) => `${index ? '   ' : '•  '}${line}`), { size: node.size, leading: node.leading, after: node.after })),
+    ] });
+  }
   for (const [index, page] of plan.pages.entries()) {
     sections.push({ properties: sectionProps, footers: { default: footer() }, children: [
       p([`${paper.subject}  ·  ${paper.level}  ·  Paper ${paper.paper}`], { size: 9, bold: true, leading: 16, after: 18 }),

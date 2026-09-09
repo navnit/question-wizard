@@ -13,6 +13,7 @@ const ICON_PATHS = Object.freeze({
   'file-down': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M12 18v-6M9 15l3 3 3-3"/>',
   'file-text': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h8M8 9h2"/>',
   'hard-drive': '<line x1="22" x2="2" y1="12" y2="12"/><path d="m5.5 5-3.1 6.2a1.8 1.8 0 0 0-.2.8v6a2 2 0 0 0 2 2h15.6a2 2 0 0 0 2-2v-6a1.8 1.8 0 0 0-.2-.8L18.5 5a2 2 0 0 0-1.8-1H7.3a2 2 0 0 0-1.8 1z"/><circle cx="18" cy="16" r="1"/><circle cx="14" cy="16" r="1"/>',
+  image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>',
   'image-off': '<path d="M3 3l18 18M10.4 6H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 1.9-1.3M21 15V8a2 2 0 0 0-2-2h-5M3 16l4-4 4 4 2-2 5 5"/><circle cx="17.5" cy="9.5" r="1.5"/>',
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
   italic: '<line x1="19" x2="10" y1="4" y2="4"/><line x1="14" x2="5" y1="20" y2="20"/><line x1="15" x2="9" y1="4" y2="20"/>',
@@ -34,7 +35,7 @@ const ICON_PATHS = Object.freeze({
 export const ICON_NAMES = Object.freeze([
   'archive', 'arrow-down', 'arrow-left', 'arrow-right', 'arrow-up',
   'bold', 'check-circle', 'chevron-left', 'chevron-right', 'copy',
-  'eraser', 'file-down', 'file-text', 'hard-drive', 'image-off',
+  'eraser', 'file-down', 'file-text', 'hard-drive', 'image', 'image-off',
   'info', 'italic', 'list', 'list-ordered', 'plus', 'redo',
   'refresh', 'subscript', 'superscript', 'text-cursor-input',
   'trash', 'triangle-alert', 'underline', 'undo', 'x',

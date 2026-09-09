@@ -74,6 +74,7 @@ export function validatePaper(paper) {
     else if (paper[key].length > max) errors.push(`${label} must be ${max} characters or fewer.`);
   }
   if (!/^\d{4}-\d{2}$/.test(paper.year)) errors.push('Use an academic year such as 2026-27.');
+  if (paper.dateYear !== undefined && !/^\d{4}$/.test(paper.dateYear)) errors.push('Use a four-digit year on the date line, such as 2027.');
   if (!Number.isInteger(paper.targetMarks) || paper.targetMarks < 1 || paper.targetMarks > 1000) errors.push('Maximum marks must be between 1 and 1000.');
   if (!paper.questions.length) errors.push('Add at least one question.');
   for (const [qi, q] of paper.questions.entries()) {

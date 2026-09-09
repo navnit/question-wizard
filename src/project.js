@@ -10,7 +10,7 @@ export const MAX_PROJECT_BYTES = 40 * 1024 * 1024;
 const capacityError = () => new Error('This paper would exceed the 40 MB project limit. Use smaller diagrams or split it into separate papers.');
 export const id = () => crypto.randomUUID();
 export const newPart = () => ({ id: id(), text: normalizeRich(''), marks: 1, lines: 2, responseType: 'written' });
-export const newQuestion = () => ({ id: id(), title: '', context: normalizeRich('', { allowBlank: false }), parts: [newPart()] });
+export const newQuestion = () => ({ id: id(), title: '', tables: [], context: normalizeRich('', { allowBlank: false }), parts: [newPart()] });
 export function createProject(example = false, now = new Date()) {
   // Use the device's local date: the academic year rolls over on June 1.
   const startYear = now.getFullYear() - (now.getMonth() < 5 ? 1 : 0);
@@ -72,6 +72,21 @@ export function parseProject(text) {
     if (value.version >= 3 ? typeof input === 'string' : typeof input !== 'string') fail(field);
     try { return normalizeRich(input, { allowBlank }); } catch { return fail(field); }
   };
+  const parseTables = (owner, label = 'response table') => {
+    if (owner.tables !== undefined && (!Array.isArray(owner.tables) || owner.tables.length > 12)) fail(`${label}s`);
+    return partTables(owner).map(table => {
+      if (!table) fail(label);
+      if (!Array.isArray(table.rows) || !table.rows.length || table.rows.length > 12 || !Array.isArray(table.rows[0])) fail(label);
+      const columns = table.rows[0].length;
+      if (columns < 1 || columns > 5 || table.rows.some(r => !Array.isArray(r) || r.length !== columns)) fail(label);
+      const parsed = { rows: table.rows.map(row => row.map(s => string(s, 300, 'table cell'))), header: table.header === true };
+      if (table.proportions) {
+        if (!Array.isArray(table.proportions) || table.proportions.length !== columns || table.proportions.some(n => !Number.isFinite(n) || n < 0.1) || Math.abs(table.proportions.reduce((s, n) => s + n, 0) - 1) > 0.001) fail('table column widths');
+        parsed.proportions = [...table.proportions];
+      }
+      return parsed;
+    });
+  };
   const p = value.paper;
   if (!p || !Array.isArray(p.questions) || p.questions.length > 100) fail('questions');
   const paper = {};
@@ -93,6 +108,7 @@ export function parseProject(text) {
       width: number(image?.width, 20, 440, 'image width'), height: number(image?.height, 10, 600, 'image height'),
     }));
     question.images = diagrams;
+    question.tables = parseTables(q, 'data table');
     question.parts = q.parts.map(part => {
       if (!part) fail('subquestion');
       let type;
@@ -112,20 +128,7 @@ export function parseProject(text) {
         if (!Array.isArray(part.bank) || part.bank.length > 3600) fail('word bank');
         result.bank = part.bank.map(s => string(s, 3600, 'word bank'));
       }
-      if (part.tables !== undefined && (!Array.isArray(part.tables) || part.tables.length > 12)) fail('response tables');
-      const tables = partTables(part).map(table => {
-        if (!table) fail('response table');
-        if (!Array.isArray(table.rows) || !table.rows.length || table.rows.length > 12 || !Array.isArray(table.rows[0])) fail('response table');
-        const columns = table.rows[0].length;
-        if (columns < 1 || columns > 5 || table.rows.some(r => !Array.isArray(r) || r.length !== columns)) fail('response table');
-        const parsed = { rows: table.rows.map(row => row.map(s => string(s, 300, 'table cell'))), header: table.header === true };
-        if (table.proportions) {
-          if (!Array.isArray(table.proportions) || table.proportions.length !== columns || table.proportions.some(n => !Number.isFinite(n) || n < 0.1) || Math.abs(table.proportions.reduce((s, n) => s + n, 0) - 1) > 0.001) fail('table column widths');
-          parsed.proportions = [...table.proportions];
-        }
-        return parsed;
-      });
-      result.tables = tables;
+      result.tables = parseTables(part);
       return result;
     });
     return question;

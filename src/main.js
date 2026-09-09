@@ -8,7 +8,7 @@ import { validatePaper } from './paper.js';
 import { loadAssets, projectAssets } from './assets.js';
 import { exportPdf } from './pdf-export.js';
 import { exportDocx } from './docx-export.js';
-import { libraryView, outlineView, coverView, questionView, imageDimensions } from './views.js';
+import { libraryView, outlineView, coverView, questionView, partSummary, imageDimensions } from './views.js';
 import { modernizeProject } from './content.js';
 import { LatestPreviewQueue } from './live-preview.js';
 import { PaperPreview } from './preview.js';
@@ -52,12 +52,36 @@ function exportStatus(message, error = false) {
     label.classList.toggle('error', error);
   }
 }
+// Expansion belongs to this editing session, not the saved paper or exports.
+const expandedParts = new Map();
+function expansionFor(question) {
+  const key = `${current.id}:${question.id}`;
+  if (!expandedParts.has(key)) expandedParts.set(key, new Set(question.parts.slice(0, 1).map(part => part.id)));
+  const expanded = expandedParts.get(key);
+  for (const id of expanded) if (!question.parts.some(part => part.id === id)) expanded.delete(id);
+  return expanded;
+}
+function refreshPartCards() {
+  const question = current?.paper.questions.find(q => q.id === selected);
+  if (!question) return;
+  const expanded = expansionFor(question);
+  for (const part of question.parts) {
+    const card = [...$('editor').querySelectorAll('.part-card')].find(card => card.dataset.part === part.id);
+    if (!card) continue;
+    const summary = partSummary(part), toggle = card.querySelector('.part-toggle');
+    toggle.setAttribute('aria-expanded', String(expanded.has(part.id)));
+    card.querySelector('.part-body').hidden = !expanded.has(part.id);
+    card.querySelector('.part-prompt').textContent = summary.prompt;
+    card.querySelector('.part-prompt').title = summary.prompt;
+    card.querySelector('.part-meta').textContent = summary.meta;
+  }
+}
 function refreshOutline() { if (current) $('outline').innerHTML = outlineView(current, selected); }
 function renderEditor() {
   destroyRichEditors(); destroyRichEditors = () => {};
   const question = current?.paper.questions.find(q => q.id === selected);
   if (!question) selected = null;
-  if (current) $('editor').innerHTML = question ? questionView(current, question) : coverView(current.paper);
+  if (current) $('editor').innerHTML = question ? questionView(current, question, expansionFor(question)) : coverView(current.paper);
   if (question) destroyRichEditors = mountRichEditors($('editor'), current, (path, value) => {
     const [kind, key, field] = path.split('.');
     const target = kind === 'q' ? current.paper.questions.find(q => q.id === key) : current.paper.questions.flatMap(q => q.parts).find(p => p.id === key);
@@ -83,7 +107,7 @@ function changed(structural = false) {
   const index = projects.findIndex(p => p.id === current.id);
   if (index >= 0) projects[index] = structuredClone(current); else projects.push(structuredClone(current));
   dirty(); writer.enqueue(current);
-  if (structural) renderEditor(); else refreshOutline();
+  if (structural) renderEditor(); else { refreshOutline(); refreshPartCards(); }
   liveQueue.request(selected);
   return true;
 }
@@ -183,7 +207,8 @@ async function action(name, element) {
   const q = current?.paper.questions.find(q => q.id === selected);
   const qi = current?.paper.questions.findIndex(q => q.id === selected);
   const part = q?.parts.find(p => p.id === element.dataset.id), pi = q?.parts.indexOf(part);
-  const ti = Number(element.closest('[data-table]')?.dataset.table ?? 0), table = part?.tables?.[ti];
+  const tableOwner = element.closest('[data-table-owner="question"]') ? q : part;
+  const ti = Number(element.closest('[data-table]')?.dataset.table ?? 0), table = tableOwner?.tables?.[ti];
   const ii = Number(element.closest('[data-image]')?.dataset.image ?? 0);
   if (name === 'library') return showLibrary();
   if (name === 'new' || name === 'example') return addProject(createProject(name === 'example'));
@@ -211,6 +236,16 @@ async function action(name, element) {
     return;
   }
   if (!current) return;
+  if (name === 'part-warning') {
+    const question = current.paper.questions.find(q => q.id === element.dataset.question);
+    const target = question?.parts.find(p => p.id === element.dataset.id);
+    if (!target) return;
+    selected = question.id; expansionFor(question).add(target.id); renderEditor();
+    const card = [...$('editor').querySelectorAll('.part-card')].find(card => card.dataset.part === target.id);
+    const field = element.dataset.field === 'options' ? card.querySelector('.choice-editor input') : card.querySelector('.ProseMirror');
+    (field || card.querySelector('.part-toggle')).focus();
+    card.scrollIntoView({ block: 'nearest' }); liveQueue.request(selected); return;
+  }
   if (name === 'cover') { selected = null; renderEditor(); liveQueue.request(null); return; }
   if (name === 'question') { selected = element.dataset.id; renderEditor(); liveQueue.request(selected); return; }
   if (name === 'first-question') {
@@ -227,6 +262,14 @@ async function action(name, element) {
     const next = newQuestion(); next.images = []; current.paper.questions.push(next); selected = next.id; changed(true); return;
   }
   if (!q) return;
+  if (name === 'toggle-part' || name === 'expand-parts' || name === 'collapse-parts') {
+    const expanded = expansionFor(q);
+    if (name === 'toggle-part' && part) {
+      if (expanded.has(part.id)) expanded.delete(part.id); else expanded.add(part.id);
+    } else if (name === 'expand-parts') q.parts.forEach(part => expanded.add(part.id));
+    else if (name === 'collapse-parts') expanded.clear();
+    refreshPartCards(); return;
+  }
   if (name === 'q-up' || name === 'q-down') move(current.paper.questions, qi, name === 'q-up' ? -1 : 1);
   else if (name === 'duplicate-question') {
     if (current.paper.questions.length >= 100) return;
@@ -251,7 +294,19 @@ async function action(name, element) {
   }
   else if (name === 'remove-image') q.images.splice(ii, 1);
   else if (name === 'image-up' || name === 'image-down') move(q.images, ii, name === 'image-up' ? -1 : 1);
-  else if (name === 'add-part') { if (q.parts.length >= 26) return; q.parts.push(newPart()); }
+  else if (name === 'add-part') { if (q.parts.length >= 26) return; const next = newPart(); q.parts.push(next); expansionFor(q).add(next.id); }
+  else if (name === 'add-table') { tableOwner.tables ||= []; if (tableOwner.tables.length >= 12) return; tableOwner.tables.push({ rows: [['', ''], ['', ''], ['', '']], header: true }); if (part === tableOwner) part.lines = 0; }
+  else if (name === 'remove-table') { if (!(await confirmDelete('Remove this table?', 'Its cells and contents will be removed.'))) return; tableOwner.tables.splice(ti, 1); }
+  else if (name === 'table-up' || name === 'table-down') move(tableOwner.tables, ti, name === 'table-up' ? -1 : 1);
+  else if (name === 'table-row') { if (table.rows.length >= 12) return; table.rows.push(table.rows[0].map(() => '')); }
+  else if (name === 'table-column') { if (table.rows[0].length >= 5) return; table.rows.forEach(row => row.push('')); delete table.proportions; }
+  else if (name === 'table-remove-row') {
+    if (table.rows.length <= 1 || !(await confirmDelete('Remove the last row?', 'Any text in that row will be removed.'))) return;
+    table.rows.pop();
+  } else if (name === 'table-remove-column') {
+    if (table.rows[0].length <= 1 || !(await confirmDelete('Remove the last column?', 'Any text in that column will be removed.'))) return;
+    table.rows.forEach(row => row.pop()); delete table.proportions;
+  }
   else if (!part) return;
   else if (name === 'option-add') { part.options ||= []; if (part.options.length >= 6) return; part.options.push(''); }
   else if (name === 'option-remove') { if (part.options.length <= 2) return; part.options.splice(Number(element.dataset.option), 1); }
@@ -262,19 +317,11 @@ async function action(name, element) {
     q.parts.splice(pi, 1);
   } else if (name === 'add-bank') part.bank = [];
   else if (name === 'remove-bank') { if (!(await confirmDelete('Remove this word bank?', 'The words will be removed from this subquestion.'))) return; delete part.bank; }
-  else if (name === 'add-table') { part.tables ||= []; if (part.tables.length >= 12) return; part.tables.push({ rows: [['', ''], ['', ''], ['', '']], header: true }); part.lines = 0; }
-  else if (name === 'remove-table') { if (!(await confirmDelete('Remove this table?', 'Its cells and contents will be removed.'))) return; part.tables.splice(ti, 1); }
-  else if (name === 'table-up' || name === 'table-down') move(part.tables, ti, name === 'table-up' ? -1 : 1);
-  else if (name === 'table-row') { if (table.rows.length >= 12) return; table.rows.push(table.rows[0].map(() => '')); }
-  else if (name === 'table-column') { if (table.rows[0].length >= 5) return; table.rows.forEach(row => row.push('')); delete table.proportions; }
-  else if (name === 'table-remove-row') {
-    if (table.rows.length <= 1 || !(await confirmDelete('Remove the last row?', 'Any text in that row will be removed.'))) return;
-    table.rows.pop();
-  } else if (name === 'table-remove-column') {
-    if (table.rows[0].length <= 1 || !(await confirmDelete('Remove the last column?', 'Any text in that column will be removed.'))) return;
-    table.rows.forEach(row => row.pop()); delete table.proportions;
-  } else return;
-  changed(true);
+  else return;
+  if (changed(true) && name === 'add-part') {
+    const card = $('editor').querySelector('.part-card:last-child');
+    card.querySelector('.ProseMirror').focus(); card.scrollIntoView({ block: 'nearest' });
+  }
 }
 document.addEventListener('click', event => {
   const element = event.target.closest('[data-action]');
@@ -323,7 +370,9 @@ document.addEventListener('input', event => {
         $('editor').querySelector('.arrangement-preview').hidden = false;
       }
       return;
-    } else question[field] = value;
+    } else if (field === 'cell') question.tables[Number(ri)].rows[Number(ci)][Number(di)] = value;
+    else if (field === 'table') question.tables[Number(ri)].header = value;
+    else question[field] = value;
   } else if (kind === 'p') {
     const part = current.paper.questions.flatMap(q => q.parts).find(p => p.id === key);
     if (field === 'responseType') {

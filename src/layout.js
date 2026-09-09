@@ -84,6 +84,7 @@ function makeRows(question, qi, measure, metrics) {
   const { template, textWidth, columns, pad } = metrics;
   const introduction = plainText(question.context).trim() ? richParagraphs(question.context, measure, { width: textWidth, role: 'context' }) : [];
   introduction.push(...imageNodes(question, metrics));
+  for (const table of question.tables || []) introduction.push(tableNode(table, measure, textWidth));
   return question.parts.map((part, pi) => {
     const nodes = pi === 0 ? [...introduction] : [];
     const before = pi === 0 ? 0 : template.partGap;

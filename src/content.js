@@ -15,6 +15,7 @@ export function modernizeProject(project) {
   copy.paper.template ??= DEFAULT_TEMPLATE_ID;
   for (const question of copy.paper.questions) {
     question.context = normalizeRich(question.context, { allowBlank: false });
+    question.tables ??= [];
     question.imageLayout ??= 'vertical';
     question.images = questionImages(question); delete question.image;
     for (const part of question.parts) {

@@ -32,3 +32,26 @@ dialog{border:1px solid var(--color-border);border-radius:9px;max-width:430px;wi
 /* Topics are direct navigation, not a record of completed steps. */
 .help-progress>button{appearance:none;background:none;border:0;border-top:3px solid var(--color-border-soft);text-align:left;min-height:44px;padding:9px 2px 4px;cursor:pointer}.help-progress>button:hover{background:var(--color-preview-rail)}.help-progress>button.reached{border-top-color:var(--color-primary)}.help-progress>button b{margin-right:5px}.help-progress>button span{font-size:10px}.help-footer{position:sticky;bottom:-26px;background:var(--color-surface);padding-bottom:8px;z-index:1}
 @media(max-width:700px){.help-progress>button{padding:5px 2px;min-height:40px;text-align:center}.help-progress>button span{display:none}.help-progress>button b{font-size:12px;margin:0}.help-footer{bottom:-18px;padding-top:12px;padding-bottom:8px}.help-content{display:flex;flex-direction:column;align-items:stretch}.help-copy{order:-1}.help-demo{margin-top:0}.tour-scene{min-height:200px}}
+
+/* Keep the prompt central while completed subquestions remain easy to scan. */
+.parts-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:28px 0 12px}
+.parts-heading h2{margin:0;font-size:14px}.parts-heading h2 span{color:var(--color-muted);font-weight:400;margin-left:5px}
+.parts-heading>div{display:flex;gap:4px;flex-wrap:wrap}.parts-heading .text-button{font-size:11px;padding:7px}
+.part-card .part-heading{gap:8px;margin-bottom:0;align-items:center}
+.part-card .part-heading h2{flex:1;min-width:0;margin:0}
+.part-toggle{display:flex;align-items:center;gap:8px;width:100%;min-width:0;padding:8px 0;background:transparent;border:0;text-align:left;color:inherit;font:inherit}
+.part-toggle:hover{background:transparent;color:var(--color-primary)}
+.part-toggle>.icon{flex:none;width:16px;height:16px;transition:transform .15s ease}
+.part-toggle[aria-expanded="true"]>.icon{transform:rotate(90deg)}
+.part-toggle span{margin-right:0}
+.part-summary{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1}
+.part-toggle .part-prompt{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:13px;font-weight:600;color:var(--color-ink)}
+.part-toggle .part-meta{font-size:10px;font-weight:400;color:var(--color-muted)}
+.part-toggle .part-number{flex:none;font-size:13px}
+.part-body{padding-top:20px}.part-body[hidden]{display:none}
+.answer-settings{min-width:0;margin:20px 0;padding:16px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-canvas)}
+.answer-settings legend{font-size:12px;font-weight:600;padding:0 6px}
+.answer-settings>.field:last-child,.answer-settings>.response-hint:last-child{margin-bottom:0}
+.validation .validation-link{text-align:left;white-space:normal;font-size:inherit;padding:3px 0;text-decoration:underline;text-underline-offset:3px}
+@media(max-width:600px){.part-card .part-heading{flex-wrap:wrap}.part-card .part-heading h2{flex-basis:100%}.part-card .part-actions{margin-left:auto}.parts-heading{align-items:flex-start}.answer-settings{padding:12px}.part-toggle .part-prompt{font-size:12px}}
+@media(prefers-reduced-motion:reduce){.part-toggle>.icon{transition:none}}

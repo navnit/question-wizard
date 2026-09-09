@@ -227,3 +227,20 @@ test('PDF and Word print the chosen date year independently from the academic ye
   assert.ok(text.includes('2026-27'));
   await pdf.cleanup();
 });
+
+test('primary data tables export in PDF and Word before subquestions in all templates', async () => {
+  for (const template of ['classic', 'ledger', 'cards']) {
+    const paper = fixture(); paper.template = template;
+    paper.questions[0].tables = [{ rows: [['Material', 'Mass'], ['Copper', '25 g']], header: true }];
+    const { result, xml } = await xmlFor(paper);
+    const text = textOfXml(xml);
+    assert.ok(text.indexOf('Copper') >= 0 && text.indexOf('Copper') < text.indexOf('Explain'));
+    const task = getDocument({ data: result.bytes.slice(), useSystemFonts: false });
+    const pdf = await task.promise;
+    const items = (await (await pdf.getPage(2)).getTextContent()).items.map(item => item.str).join(' ');
+    assert.match(items, /Copper/);
+    assert.match(items, /25 g/);
+    assert.ok(items.indexOf('Copper') < items.indexOf('Explain'));
+    await task.destroy();
+  }
+});

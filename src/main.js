@@ -13,6 +13,7 @@ import { modernizeProject } from './content.js';
 import { LatestPreviewQueue } from './live-preview.js';
 import { PaperPreview } from './preview.js';
 import { mountRichEditors } from './rich-editor.js';
+import { mountTableResizing } from './table-columns.js';
 import { mountIcons } from './icons.js';
 
 const $ = name => document.getElementById(name);
@@ -26,6 +27,7 @@ function status(element, message, iconName = '') {
   element.append(document.createTextNode(message));
 }
 let projects = [], current = null, selected = null, revision = 0, result = null, generating = false, generation = 0, search = '', imageTarget;
+let renderedPreview = null;
 let destroyRichEditors = () => {};
 const writer = new DraftWriter(saveProject, (state, error) => {
   status($('save-state'), state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved on this device' : 'Not saved', state === 'saving' ? 'refresh' : state === 'saved' ? 'check-circle' : 'triangle-alert');
@@ -85,18 +87,18 @@ function renderEditor() {
   if (question) destroyRichEditors = mountRichEditors($('editor'), current, (path, value) => {
     const [kind, key, field] = path.split('.');
     const target = kind === 'q' ? current.paper.questions.find(q => q.id === key) : current.paper.questions.flatMap(q => q.parts).find(p => p.id === key);
-    target[field] = value; changed();
+    target[field] = value; changed(false, { typing: true });
   }, error => notice(error.message || error, true));
   refreshOutline();
 }
 function dirty() {
-  revision++; result = null;
+  revision++; result = null; renderedPreview = null;
   $('pdf-download').disabled = true; $('docx-download').disabled = true;
   $('preview-hint').textContent = 'Updating live preview…';
   $('page-canvas').classList.add('outdated');
   exportStatus('Updating the paper to include your latest changes…');
 }
-function changed(structural = false) {
+function changed(structural = false, { printable = true, typing = false } = {}) {
   try { current = prepareDraft(current); }
   catch (error) {
     current = modernizeProject(projects.find(p => p.id === current.id));
@@ -106,15 +108,16 @@ function changed(structural = false) {
   current.updatedAt = new Date().toISOString();
   const index = projects.findIndex(p => p.id === current.id);
   if (index >= 0) projects[index] = structuredClone(current); else projects.push(structuredClone(current));
-  dirty(); writer.enqueue(current);
+  if (printable) dirty();
+  writer.enqueue(current);
   if (structural) renderEditor(); else { refreshOutline(); refreshPartCards(); }
-  liveQueue.request(selected);
+  if (printable) { if (typing) liveQueue.schedule(selected); else liveQueue.request(selected); }
   return true;
 }
 function rememberOpen(key) { try { if (key) sessionStorage.setItem('question-wizard-open', key); else sessionStorage.removeItem('question-wizard-open'); } catch {} }
 async function openProject(project) {
   if (!(await writer.flush())) { notice('The current draft could not be saved. Download its backup before switching papers.', true); return; }
-  const token = ++generation; liveQueue.cancel(); generating = false; result = null; revision = 0;
+  const token = ++generation; liveQueue.cancel(); generating = false; result = null; renderedPreview = null; revision = 0;
   await preview.clear(); if (token !== generation) return;
   current = modernizeProject(project); selected = null;
   $('library').hidden = true; $('workspace').hidden = false;
@@ -128,7 +131,7 @@ async function openProject(project) {
 async function showLibrary() {
   if (!(await writer.flush())) { notice('Saving failed. Download a project backup before leaving this paper.', true); return; }
   destroyRichEditors(); destroyRichEditors = () => {}; $('editor').replaceChildren();
-  const token = ++generation; liveQueue.cancel(); generating = false; current = null; result = null;
+  const token = ++generation; liveQueue.cancel(); generating = false; current = null; result = null; renderedPreview = null;
   await preview.clear(); if (token !== generation) return; rememberOpen(null);
   $('workspace').hidden = true; $('library').hidden = false; status($('save-state'), '');
   renderLibrary();
@@ -151,26 +154,37 @@ async function backup() {
   download(new Blob([text], { type: 'application/json' }), `${filename(snapshot.paper.title)}.qw.json`);
   notice('Project backup downloaded, including your questions and diagrams.');
 }
+function pageForQuestion(plan, paper, questionId) {
+  const questionIndex = paper.questions.findIndex(q => q.id === questionId);
+  const pageIndex = questionIndex < 0 ? -1 : plan.pages.findIndex(page => page.rows.some(row => row.question === questionIndex + 1));
+  return pageIndex < 0 ? 1 : pageIndex + plan.instructionPages.length + 2;
+}
 async function generate(followQuestion = null) {
   if (!current) return;
+  // Selecting another editor only needs a page from the existing PDF, including
+  // draft previews whose incomplete content currently prevents downloads.
+  if (renderedPreview?.projectId === current.id && renderedPreview.revision === revision && preview.document) {
+    const page = pageForQuestion(renderedPreview.plan, current.paper, followQuestion);
+    if (page !== preview.page) await preview.show(page);
+    return;
+  }
   const { errors } = validatePaper(current.paper);
   const snapshot = structuredClone(current), version = revision, token = ++generation;
   generating = true; result = null;
   $('generate').disabled = true; $('pdf-download').disabled = true; $('docx-download').disabled = true;
   $('previous').disabled = true; $('next').disabled = true;
-  exportStatus('Updating the live paper preview…');
+  exportStatus('Updating the paper to include your latest changes…');
   try {
     const assets = await projectAssets(snapshot);
     const pdf = await exportPdf(snapshot.paper, assets, { draft: true });
     if (token !== generation || current?.id !== snapshot.id) return;
-    const questionIndex = snapshot.paper.questions.findIndex(q => q.id === followQuestion);
-    const pageIndex = questionIndex < 0 ? -1 : pdf.plan.pages.findIndex(page => page.rows.some(row => row.question === questionIndex + 1));
-    const committed = await preview.load(pdf.bytes, () => token === generation && current?.id === snapshot.id, pageIndex < 0 ? 1 : pageIndex + pdf.plan.instructionPages.length + 2);
+    const committed = await preview.load(pdf.bytes, () => token === generation && current?.id === snapshot.id, pageForQuestion(pdf.plan, snapshot.paper, followQuestion));
     if (token !== generation || current?.id !== snapshot.id) return;
     if (!committed) { exportStatus('Preview refresh was interrupted. Update the preview before downloading.', true); return; }
     $('preview-empty').hidden = true; $('page-canvas').classList.remove('outdated');
     $('page-canvas').dataset.revision = String(version);
-    if (version !== revision) { $('preview-hint').textContent = 'Resizing… showing the latest rendered frame.'; return; }
+    if (version !== revision) { $('preview-hint').textContent = 'Updating live preview…'; return; }
+    renderedPreview = { projectId: snapshot.id, revision: version, plan: pdf.plan };
     if (errors.length) {
       $('preview-hint').textContent = 'Draft preview — downloads need the items below completed.';
       exportStatus(`Draft preview. ${errors.join(' ')}`);
@@ -223,7 +237,7 @@ async function action(name, element) {
   }
   if (name === 'import') { $('import-file').click(); return; }
   if (name === 'backup') return backup();
-  if (name === 'generate') return liveQueue.request(selected);
+  if (name === 'generate') { renderedPreview = null; return liveQueue.request(selected); }
   if (name === 'pdf' || name === 'docx') {
     const ready = result;
     if (!ready || ready.revision !== revision) return;
@@ -298,6 +312,7 @@ async function action(name, element) {
   else if (name === 'add-table') { tableOwner.tables ||= []; if (tableOwner.tables.length >= 12) return; tableOwner.tables.push({ rows: [['', ''], ['', ''], ['', '']], header: true }); if (part === tableOwner) part.lines = 0; }
   else if (name === 'remove-table') { if (!(await confirmDelete('Remove this table?', 'Its cells and contents will be removed.'))) return; tableOwner.tables.splice(ti, 1); }
   else if (name === 'table-up' || name === 'table-down') move(tableOwner.tables, ti, name === 'table-up' ? -1 : 1);
+  else if (name === 'table-equal') delete table.proportions;
   else if (name === 'table-row') { if (table.rows.length >= 12) return; table.rows.push(table.rows[0].map(() => '')); }
   else if (name === 'table-column') { if (table.rows[0].length >= 5) return; table.rows.forEach(row => row.push('')); delete table.proportions; }
   else if (name === 'table-remove-row') {
@@ -327,6 +342,11 @@ document.addEventListener('click', event => {
   const element = event.target.closest('[data-action]');
   if (element && !element.disabled) action(element.dataset.action, element).catch(error => notice(error.message || 'The action could not be completed.', true));
 });
+mountTableResizing($('editor'), block => {
+  const question = current?.paper.questions.find(q => q.id === selected);
+  const owner = block.dataset.tableOwner === 'question' ? question : question?.parts.find(part => part.id === block.dataset.id);
+  return owner?.tables?.[Number(block.dataset.table)];
+}, () => changed(false, { typing: true }), () => liveQueue.request(selected));
 document.addEventListener('input', event => {
   const element = event.target;
   if (element.id === 'search') { search = element.value; renderLibrary(); $('search').focus(); return; }
@@ -339,7 +359,7 @@ document.addEventListener('input', event => {
   }
   if (kind === 'instruction') {
     current.paper.instructions = { ...instructionSettings(current.paper), [key]: value };
-    changed();
+    changed(false, { typing: element.matches('textarea, input:not([type=checkbox]):not([type=range])') });
     return;
   }
   if (kind === 'paper') {
@@ -387,7 +407,7 @@ document.addEventListener('input', event => {
     else if (field === 'table') part.tables[Number(ri)].header = value;
     else part[field] = value;
   }
-  changed();
+  changed(false, { printable: !(kind === 'q' && field === 'title'), typing: element.matches('textarea, input:not([type=checkbox]):not([type=range])') });
 });
 $('image-file').addEventListener('change', async event => {
   const file = event.target.files[0], target = imageTarget; event.target.value = '';

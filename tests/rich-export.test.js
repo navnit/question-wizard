@@ -231,8 +231,11 @@ test('PDF and Word print the chosen date year independently from the academic ye
 test('primary data tables export in PDF and Word before subquestions in all templates', async () => {
   for (const template of ['classic', 'ledger', 'cards']) {
     const paper = fixture(); paper.template = template;
-    paper.questions[0].tables = [{ rows: [['Material', 'Mass'], ['Copper', '25 g']], header: true }];
+    paper.questions[0].tables = [{ rows: [['Material', 'Mass'], ['Copper', '25 g']], header: true, proportions: [0.3, 0.7] }];
     const { result, xml } = await xmlFor(paper);
+    const table = result.plan.pages[0].rows[0].nodes.find(node => node.type === 'table');
+    assert.ok(Math.abs(table.widths[0] / table.widths[1] - 3 / 7) < 1e-9);
+    for (const width of table.widths) assert.ok(xml.includes(`<w:gridCol w:w="${Math.round(width * 20)}"/>`));
     const text = textOfXml(xml);
     assert.ok(text.indexOf('Copper') >= 0 && text.indexOf('Copper') < text.indexOf('Explain'));
     const task = getDocument({ data: result.bytes.slice(), useSystemFonts: false });

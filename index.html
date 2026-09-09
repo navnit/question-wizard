@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#183C34" />
+    <meta name="description" content="Create school question papers with automatic formatting, local drafts, and offline Word and PDF exports." />
+    <title>Question Wizard</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%23183C34'/%3E%3Ctext x='10' y='29' font-family='serif' font-size='29' fill='white'%3EQ%3C/text%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <header class="app-header">
+      <button class="brand" data-action="library" aria-label="Question Wizard — all papers"><span class="monogram">Q</span> Question Wizard</button>
+      <span id="save-state" role="status" aria-live="polite"></span>
+      <span class="connection" id="connection"><span data-icon="refresh" aria-hidden="true"></span><span>Preparing offline files…</span></span>
+    </header>
+    <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+    <main id="library" class="library"></main>
+    <main id="workspace" hidden>
+      <nav class="outline" aria-label="Paper outline"><div id="outline"></div></nav>
+      <section class="editor-column" aria-label="Question editor">
+        <div class="editor-top"><button class="text-button" data-action="library"><span data-icon="arrow-left" aria-hidden="true"></span><span>All papers</span></button><button class="text-button" data-action="backup"><span data-icon="archive" aria-hidden="true"></span><span>Download project backup</span></button></div>
+        <div id="editor"></div>
+      </section>
+      <section class="preview" aria-label="Generated PDF preview">
+        <div class="preview-toolbar"><div><strong>Print preview</strong><span id="preview-hint">Generate your paper when you're ready.</span></div><button id="generate" class="primary" data-action="generate"><span data-icon="refresh" aria-hidden="true"></span><span>Update preview</span></button></div>
+        <div class="preview-controls"><nav aria-label="Preview pages"><button id="previous" class="icon-button" aria-label="Previous page" title="Previous page" disabled><span data-icon="chevron-left" aria-hidden="true"></span></button><span id="page-label">—</span><button id="next" class="icon-button" aria-label="Next page" title="Next page" disabled><span data-icon="chevron-right" aria-hidden="true"></span></button></nav><div class="exports"><button id="pdf-download" data-action="pdf" disabled><span data-icon="file-down" aria-hidden="true"></span><span>Download PDF</span></button><button id="docx-download" data-action="docx" disabled><span data-icon="file-down" aria-hidden="true"></span><span>Download Word</span></button></div></div>
+        <div id="export-status" role="status" aria-live="polite"></div>
+        <div class="paper-stage"><canvas id="page-canvas" hidden role="img" aria-label="Generated paper preview"></canvas><div id="preview-empty"><span class="empty-paper" aria-hidden="true">Q</span><h3>Your paper takes shape here.</h3><p>Write your questions, check the marks,<br>then update the preview.</p></div></div>
+        <p class="preview-note">PDF is the print reference. Word stays editable; spacing may differ. Review the paper before printing.</p>
+      </section>
+    </main>
+    <input type="file" id="import-file" accept=".json,.qw.json,application/json" hidden />
+    <input type="file" id="image-file" accept="image/png,image/jpeg" hidden />
+    <dialog id="confirm-dialog"><form method="dialog"><p class="eyebrow">PLEASE CONFIRM</p><h2 id="confirm-title">Delete this item?</h2><p id="confirm-message"></p><div class="dialog-actions"><button value="cancel" class="secondary" autofocus>Keep it</button><button value="confirm" class="danger"><span data-icon="trash" aria-hidden="true"></span><span>Delete</span></button></div></form></dialog>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

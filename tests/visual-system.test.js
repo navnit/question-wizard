@@ -19,8 +19,6 @@ test('Academic Evergreen semantic tokens use the approved values', () => {
     '--color-ink:#183c34',
     '--color-primary:#24634f',
     '--color-primary-hover:#1d5543',
-    '--color-support:#6f875f',
-    '--color-muted:#66756c',
     '--color-border:#cbd5ca',
     '--color-border-soft:#d7ded5',
     '--color-focus:#b7793f',
@@ -133,4 +131,23 @@ test('template choices are responsive and expose a checked state', () => {
   assert.match(css, /\.template-option:has\(input:checked\)\{[^}]*border-color:var\(--color-primary\)/);
   assert.match(css, /@media\(max-width:620px\)\{[\s\S]*?\.template-options\{[^}]*grid-template-columns:1fr/);
   assert.match(css, /@media\(max-width:620px\)\{[\s\S]*?\.template-option\{[^}]*min-height:36px/);
+});
+
+// Supporting copy must remain readable on every surface used by the editor.
+test('supporting text meets normal-text contrast on the app surfaces', () => {
+  const color = name => css.match(new RegExp(`--color-${name}:(#[0-9a-f]{6})`))[1];
+  const luminance = hex => {
+    const [r, g, b] = hex.slice(1).match(/../g).map(channel => {
+      const value = parseInt(channel, 16) / 255;
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  for (const foreground of ['muted', 'support']) {
+    for (const background of ['surface', 'canvas', 'outline-rail', 'preview-rail', 'selection']) {
+      const values = [color(foreground), color(background)].map(luminance).sort((a, b) => b - a);
+      const ratio = (values[0] + 0.05) / (values[1] + 0.05);
+      assert.ok(ratio >= 4.5, `${foreground} on ${background}: ${ratio.toFixed(2)}:1`);
+    }
+  }
 });

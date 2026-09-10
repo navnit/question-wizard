@@ -1,3 +1,4 @@
+import { CHECKBOX_SIZE, CHECKBOX_STROKE } from './answer-checkbox.js';
 import { PDFDocument, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { PAGE, paragraph, layoutPaper } from './layout.js';
@@ -37,7 +38,7 @@ export async function exportPdf(paper, assets, { draft = false } = {}) {
   const text = (value, x, y, size = 11.5, bold = false, color = black) => page.drawText(value, { x, y: PAGE.height - y - size, size, font: fonts[bold ? 'bold' : 'regular'], color });
   const centered = (value, y, size = 11.5, bold = false) => text(value, (PAGE.width - measure(value, size, bold)) / 2, y, size, bold);
   const line = (x1, y1, x2, y2, thickness = 0.6, color = black) => page.drawLine({ start: { x: x1, y: PAGE.height - y1 }, end: { x: x2, y: PAGE.height - y2 }, thickness, color });
-  const rect = (x, y, width, height, { border = black, fill } = {}) => page.drawRectangle({ x, y: PAGE.height - y - height, width, height, borderColor: border, borderWidth: 0.6, ...(fill ? { color: fill } : {}) });
+  const rect = (x, y, width, height, { border = black, fill, borderWidth = 0.6 } = {}) => page.drawRectangle({ x, y: PAGE.height - y - height, width, height, borderColor: border, borderWidth, ...(fill ? { color: fill } : {}) });
   const image = (name, x, y, width, height) => page.drawImage(images[name], { x, y: PAGE.height - y - height, width, height });
   const drawParagraph = (node, x, y, width) => {
     node.lines.forEach((value, i) => text(value, node.align === 'center' ? x + (width - measure(value, node.size, node.bold)) / 2 : x, y + i * node.leading, node.size, node.bold));
@@ -46,7 +47,7 @@ export async function exportPdf(paper, assets, { draft = false } = {}) {
     for (const measured of node.lines) for (const run of measured.runs) {
       const baseline = y + measured.y + measured.baseline + run.offset;
       if (run.type === 'blank') line(x + run.x, baseline + 1.5, x + run.x + run.width, baseline + 1.5);
-      else if (run.type === 'checkbox') rect(x + run.x + 0.5, baseline - 8.5, run.width - 1, 8.5);
+      else if (run.type === 'checkbox') rect(x + run.x + CHECKBOX_STROKE / 2, baseline - CHECKBOX_SIZE + CHECKBOX_STROKE / 2, CHECKBOX_SIZE - CHECKBOX_STROKE, CHECKBOX_SIZE - CHECKBOX_STROKE, { borderWidth: CHECKBOX_STROKE });
       else {
         page.drawText(run.text, { x: x + run.x, y: PAGE.height - baseline, size: run.size, font: fonts[fontKey(run.bold, run.italic)], color: black });
         if (run.marks.includes('underline')) line(x + run.x, baseline + 1.5, x + run.x + run.width, baseline + 1.5, 0.5);

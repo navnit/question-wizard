@@ -1,19 +1,20 @@
+import { CHECKBOX_SIZE } from './answer-checkbox.js';
 import { richBlocks } from './rich-text.js';
 
 export const BLANK_WIDTH = 85.0393700787;
 const SIZE = 11.5;
-const LEADING = 16;
+const LEADING = 22;
 const textRun = (text, marks = []) => ({ type: 'text', text, marks });
 
 function measuredRun(run, measure) {
   const marks = run.marks || [];
   const script = marks.includes('superscript') || marks.includes('subscript');
-  const size = script ? 8.5 : SIZE;
+  const size = run.type === 'checkbox' ? CHECKBOX_SIZE : script ? 8.5 : SIZE;
   const bold = marks.includes('bold'), italic = marks.includes('italic');
   return {
     ...run, marks, size, bold, italic,
     offset: marks.includes('superscript') ? -4 : marks.includes('subscript') ? 3 : 0,
-    width: run.type === 'blank' ? BLANK_WIDTH : measure(run.text, size, bold, italic),
+    width: run.type === 'blank' ? BLANK_WIDTH : run.type === 'checkbox' ? CHECKBOX_SIZE : measure(run.text, size, bold, italic),
   };
 }
 
@@ -41,7 +42,12 @@ function styledParagraph(content, measure, { width, indent = 0, labels = [], aft
   const lines = [];
   let runs = [], cursor = indent, pending = [], hasContent = false;
   const finishLine = () => {
-    const lineRuns = lines.length ? runs : [...labels, ...runs];
+    let lineRuns = lines.length ? runs : [...labels, ...runs];
+    // The 12pt square is taller than the roughly 8pt capital letters.
+    // Lift the text 2pt so both visual centres coincide in PDF and Word.
+    if (lineRuns.some(run => run.type === 'checkbox')) {
+      lineRuns = lineRuns.map(run => run.type === 'text' ? { ...run, offset: run.offset - 2 } : run);
+    }
     const baseline = Math.max(SIZE, ...lineRuns.map(run => run.size - run.offset));
     const descent = Math.max(SIZE * 0.25, ...lineRuns.map(run => run.size * 0.25 + run.offset));
     const height = Math.max(LEADING, Math.ceil((baseline + descent) * 2) / 2);
@@ -88,8 +94,11 @@ export function richParagraphs(value, measure, { width, prefix = '', role = 'pro
 
 export function responseNodes(part, type, measure, width) {
   if (type === 'multiple-choice') return (part.options || []).map((option, index) => styledParagraph([textRun(option)], measure, {
-    width, indent: 18, role: 'option', after: 4,
-    labels: [{ ...measuredRun(textRun(`${String.fromCharCode(65 + index)}.`), measure), role: 'label', x: 0 }],
+    width, indent: part.showCheckboxes === true ? CHECKBOX_SIZE + 6 + 18 : 18, role: 'option', after: 6,
+    labels: [
+      ...(part.showCheckboxes === true ? [{ ...measuredRun({ type: 'checkbox', text: '□' }, measure), role: 'label', x: 0 }] : []),
+      { ...measuredRun(textRun(`${String.fromCharCode(65 + index)}.`), measure), role: 'label', x: part.showCheckboxes === true ? CHECKBOX_SIZE + 6 : 0 },
+    ],
   }));
   if (type === 'true-false') return [styledParagraph([
     { type: 'checkbox', text: '□' }, textRun(' True     '), { type: 'checkbox', text: '□' }, textRun(' False'),

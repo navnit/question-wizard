@@ -118,6 +118,10 @@ export function parseProject(text) {
         if (typeof part.showAnswerLines !== 'boolean') fail('answer line visibility');
         result.showAnswerLines = part.showAnswerLines;
       }
+      if (part.showCheckboxes !== undefined) {
+        if (typeof part.showCheckboxes !== 'boolean') fail('checkbox visibility');
+        result.showCheckboxes = part.showCheckboxes;
+      }
       if (part.options !== undefined) {
         if (!Array.isArray(part.options) || part.options.length > 6) fail('options');
         result.options = part.options.map(option => string(option, 300, 'option'));

@@ -117,7 +117,7 @@ test('response labels hang under their option text and marks ignore responses, b
   part.bank = ['a word']; part.tables = [{rows:[['Response']],header:false}];
   const { result, xml } = await xmlFor(paper);
   const row = result.plan.pages[0].rows[0];
-  assert.equal(row.promptOffset, 132);
+  assert.equal(row.promptOffset, 138);
   const options = row.nodes.filter(n => n.role === 'option');
   assert.equal(options.length, 2); assert.ok(options[0].lines.length > 1);
   const firstText = options[0].lines[0].runs.find(r => r.role !== 'label');
@@ -128,10 +128,10 @@ test('response labels hang under their option text and marks ignore responses, b
   assert.match(xml, /w:left="\d+"/);
   part.responseType = 'true-false';
   const tf = await xmlFor(paper);
-  assert.equal(tf.result.plan.pages[0].rows[0].promptOffset, 132);
+  assert.equal(tf.result.plan.pages[0].rows[0].promptOffset, 138);
   const boxes = tf.result.plan.pages[0].rows[0].nodes.flatMap(n => n.type === 'rich-paragraph' ? n.lines.flatMap(l => l.runs) : []).filter(r => r.type === 'checkbox');
   assert.equal(boxes.length, 2);
-  assert.match(tf.xml, /□/);
+  assert.equal((tf.xml.match(/descr="Square checkbox"/g) || []).length, 2);
   part.responseType = 'written'; part.lines = 0;
   const written = await exportPdf(paper, assets);
   const tfPaths = ((await pdfOperators(tf.result.bytes)).match(/\nh\n/g) || []).length;
@@ -246,4 +246,30 @@ test('primary data tables export in PDF and Word before subquestions in all temp
     assert.ok(items.indexOf('Copper') < items.indexOf('Explain'));
     await task.destroy();
   }
+});
+
+test('optional multiple-choice boxes persist through import and align wrapped option text', async () => {
+  const { parseProject } = await import('../src/project.js');
+  const project = createProject();
+  const part = project.paper.questions[0].parts[0];
+  part.responseType = 'multiple-choice';
+  part.options = ['A long answer that wraps under its own text. '.repeat(6), 'Short answer'];
+  part.showCheckboxes = true;
+  const restored = parseProject(JSON.stringify(project));
+  assert.equal(restored.paper.questions[0].parts[0].showCheckboxes, true);
+  restored.paper.targetMarks = 1;
+  restored.paper.questions[0].parts[0].text = document([run('Choose one.')]);
+  for (const template of ['classic', 'ledger', 'cards']) {
+    restored.paper.template = template;
+    const { result, xml } = await xmlFor(restored.paper);
+    const options = result.plan.pages.flatMap(p => p.rows).flatMap(r => r.nodes).filter(n => n.role === 'option');
+    assert.equal(options.flatMap(n => n.lines.flatMap(l => l.runs)).filter(r => r.type === 'checkbox').length, 2);
+    assert.ok(options[0].lines.length > 1);
+    assert.equal(options[0].lines[1].runs[0].x, options[0].indent);
+    assert.equal((xml.match(/descr="Square checkbox"/g) || []).length, 2);
+  }
+  part.showCheckboxes = false;
+  assert.equal(parseProject(JSON.stringify(project)).paper.questions[0].parts[0].showCheckboxes, false);
+  part.showCheckboxes = 'yes';
+  assert.throws(() => parseProject(JSON.stringify(project)), /checkbox/);
 });

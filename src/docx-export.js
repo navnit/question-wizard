@@ -3,6 +3,7 @@ import {
   Packer, WidthType, TableLayoutType, BorderStyle, HeightRule, LineRuleType,
   AlignmentType, PageNumber, TabStopType, SectionType, VerticalAlign, Tab,
 } from 'docx';
+import { CHECKBOX_SIZE, checkboxPng } from './answer-checkbox.js';
 import { PAGE, PAD } from './layout.js';
 import { footerText } from './paper.js';
 import { PAPER_GRAY } from './templates.js';
@@ -52,6 +53,11 @@ function richParagraph(node) {
     for (const run of line.runs) {
       if (run.x > cursor + 0.001) tabTo(run.x);
       if (run.type === 'blank') tabTo(run.x + run.width, true);
+      else if (run.type === 'checkbox') children.push(new ImageRun({
+        type: 'png', data: checkboxPng,
+        transformation: { width: CHECKBOX_SIZE * 4 / 3, height: CHECKBOX_SIZE * 4 / 3 },
+        altText: { title: 'Square checkbox', description: 'Square checkbox', name: 'Square checkbox' },
+      }));
       else children.push(new TextRun({
         text: run.text, font: font(), size: run.size * 2,
         bold: run.bold, italics: run.italic,
